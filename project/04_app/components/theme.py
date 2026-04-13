@@ -85,9 +85,15 @@ def sidebar_nav() -> None:
         st.page_link("pages/4_The_Prescription.py", label="4. The Prescription", icon="🎯")
         st.page_link("pages/5_Small_Business_Solutions.py", label="5. Small Business Solutions", icon="💡")
 
-        st.markdown("<hr style='border:none;border-top:1px solid #e5e7eb;margin:12px 0'>",
-                    unsafe_allow_html=True)
-        st.caption("Jackson State University")
+        st.markdown("""
+<hr style='border:none;border-top:1px solid #e5e7eb;margin:12px 0'>
+<div style='font-size:0.65rem;color:#6b7280;line-height:1.6;text-align:center;padding:0 4px'>
+  <div style='font-weight:600;color:#374151;margin-bottom:2px'>Jackson State University</div>
+  Created by<br>
+  <span style='color:#1e293b;font-weight:600'>Saurav Bhattarai &amp; Richa Pokhrel</span><br>
+  Under <span style='color:#1e293b;font-weight:600'>Dr. Rocky Talchabhadel</span>
+</div>
+""", unsafe_allow_html=True)
 
 
 def page_header(title: str, subtitle: str = "") -> None:
