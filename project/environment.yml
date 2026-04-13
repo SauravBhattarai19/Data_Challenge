@@ -1,0 +1,28 @@
+name: resilience-index
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+    - pandas>=2.0
+    - geopandas>=0.14
+    - numpy>=1.24
+    - scipy
+    - scikit-learn
+    - streamlit>=1.32
+    - folium>=0.15
+    - streamlit-folium>=0.18
+    - plotly>=5.18
+    - openpyxl
+    - pyarrow>=14
+    - dbfread
+    - requests
+    - tqdm
+    - xlrd
+    - zipfile36
+    - pydeck
+    - branca
+    - jupyter
+    - ipykernel

@@ -1,0 +1,46 @@
+# ── Data (raw inputs, too large for GitHub) ──────────────────────────────────
+Data/
+
+# ── Generated / processed data outputs ───────────────────────────────────────
+project/data_processed/
+project/reports/community_profiles/
+
+# ── Python artifacts ──────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ipynb_checkpoints/
+*.egg-info/
+dist/
+build/
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+
+# ── Environment / secrets ─────────────────────────────────────────────────────
+.env
+.env.*
+.streamlit/secrets.toml
+
+# ── Claude Code artifacts ─────────────────────────────────────────────────────
+.claude/
+
+# ── IDE artifacts ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS artifacts ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Planning & personal notes (root-level markdown) ───────────────────────────
+claude_opus_plan.md
+claude_plan.md
+knowledge.md
+last_brainstorm.md
+plan.md
+*.txt
