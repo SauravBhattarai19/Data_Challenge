@@ -1,0 +1,84 @@
+{
+  "Social Vulnerability & Preventive Care": {
+    "weight": 0.2758,
+    "features": [
+      "RPL_THEME1",
+      "DENTAL_CrudePrev",
+      "SLEEP_CrudePrev",
+      "RPL_THEME3",
+      "COLON_SCREEN_CrudePrev",
+      "ACCESS2_CrudePrev",
+      "MAMMOUSE_CrudePrev",
+      "RPL_THEME4",
+      "RPL_THEME2"
+    ],
+    "top_feature": "RPL_THEME1"
+  },
+  "Chronic Disease Load": {
+    "weight": 0.2675,
+    "features": [
+      "LPA_CrudePrev",
+      "MOBILITY_CrudePrev",
+      "DIABETES_CrudePrev",
+      "STROKE_CrudePrev",
+      "CSMOKING_CrudePrev",
+      "MHLTH_CrudePrev",
+      "OBESITY_CrudePrev",
+      "COPD_CrudePrev",
+      "BPHIGH_CrudePrev",
+      "BINGE_CrudePrev",
+      "Affordable Housing Score_2017",
+      "CHECKUP_CrudePrev"
+    ],
+    "top_feature": "LPA_CrudePrev"
+  },
+  "Economic Foundation": {
+    "weight": 0.1978,
+    "features": [
+      "Commercial Diversity Score_2017",
+      "igs_economy_2017",
+      "Travel Time to Work Score_2017",
+      "Personal Income Score_2017",
+      "Minority/Women Owned Businesses Score_2017",
+      "Spending per Capita Score_2017",
+      "New Businesses Score_2017",
+      "HWAV_RISKS"
+    ],
+    "top_feature": "Commercial Diversity Score_2017"
+  },
+  "Climate & Disaster Exposure": {
+    "weight": 0.1202,
+    "features": [
+      "BUILDVALUE",
+      "POPULATION",
+      "EAL_SCORE",
+      "RISK_SCORE",
+      "IFLD_RISKS",
+      "TRND_RISKS"
+    ],
+    "top_feature": "BUILDVALUE"
+  },
+  "Connectivity & Labor Access": {
+    "weight": 0.1029,
+    "features": [
+      "Internet Access Score_2017",
+      "Labor Market Engagement Index Score_2017",
+      "Female Above Poverty Score_2017",
+      "PovertyRate",
+      "RPL_HVM",
+      "RPL_EBM"
+    ],
+    "top_feature": "Internet Access Score_2017"
+  },
+  "Healthcare Provider Supply": {
+    "weight": 0.0358,
+    "features": [
+      "biz_food_retail",
+      "biz_pharmacy",
+      "fqhc_count",
+      "mh_hpsa_score_max",
+      "biz_small_pct"
+    ],
+    "top_feature": "biz_food_retail"
+  }
+}

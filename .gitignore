@@ -2,7 +2,32 @@
 Data/
 
 # ── Generated / processed data outputs ───────────────────────────────────────
-project/data_processed/
+# App-required files in data_processed/ ARE tracked (all under GitHub's 100 MB limit).
+# Exclude files that are not loaded by the Streamlit app or exceed the 100 MB limit:
+
+# 131 MB shapefile — over GitHub's hard limit
+project/data_processed/raw/tl_2022_us_county/
+
+# Raw parquet files not loaded by the Streamlit app
+project/data_processed/raw/igs_all_years.parquet
+project/data_processed/raw/igs_latest.parquet
+project/data_processed/raw/fema_nri.parquet
+project/data_processed/raw/svi.parquet
+project/data_processed/raw/cdc_places.parquet
+project/data_processed/raw/food_atlas.parquet
+project/data_processed/raw/eji.parquet
+project/data_processed/raw/ahrf_county.parquet
+project/data_processed/raw/cbp_naics_county.parquet
+project/data_processed/raw/fqhc_county_counts.parquet
+project/data_processed/raw/hpsa_pc_county.parquet
+project/data_processed/raw/hpsa_mh_county.parquet
+project/data_processed/raw/mua_county.parquet
+
+# Build-stage files not loaded by the Streamlit app
+project/data_processed/master_tract.parquet
+project/data_processed/shap_values.parquet
+project/data_processed/igs_improvement_model.parquet
+
 project/reports/community_profiles/
 
 # ── Python artifacts ──────────────────────────────────────────────────────────
