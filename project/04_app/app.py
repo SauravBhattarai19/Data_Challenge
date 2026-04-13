@@ -35,7 +35,7 @@ from config import (
 @st.cache_data(show_spinner="Loading data...")
 def load_data():
     if not IGS_NATIONAL.exists():
-        return None, None
+        return None, None, None, None
     national = pd.read_parquet(IGS_NATIONAL)
 
     typ_path = PROCESSED / 'community_typology.parquet'
