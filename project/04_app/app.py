@@ -287,7 +287,3 @@ with c3:
     st.markdown("Concrete small-business interventions mapped to each gap, with an IGS impact simulator.")
 
 st.divider()
-st.caption(
-    f"Built by Newton Bhattarai · Jackson State University · "
-    f"{total_tracts:,} census tracts · 10 datasets · SHAP-driven insights"
-)
