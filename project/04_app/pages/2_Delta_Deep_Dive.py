@@ -48,7 +48,7 @@ def load_fqhc_sites():
 delta = load_delta()
 
 if delta is None:
-    st.warning("Delta profile not built. Run: `python 02_build/build_delta_profile.py`")
+    st.error("Delta profile data is not available.")
     st.stop()
 
 page_header(
@@ -308,4 +308,4 @@ if geojson_path:
         )
         st_folium(m, width=None, height=500, returned_objects=[])
 else:
-    st.info("GeoJSON not available. Run `python 02_build/build_delta_geojson.py` for tract maps.")
+    st.info("Tract-level map data is not available for this view.")

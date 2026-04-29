@@ -44,6 +44,7 @@ AHRF_PARQUET        = PROCESSED_RAW / "ahrf_county.parquet"
 # ── Processed Output Paths (build stage) ─────────────────────────────────────
 MASTER_TRACT        = PROCESSED / "master_tract.parquet"
 IGS_TRENDS_PARQUET  = PROCESSED / "igs_trends.parquet"
+IGS_TRENDS_SUMMARY  = PROCESSED / "igs_trends_summary.parquet"   # pre-aggregated (nat/MS/Delta means by year)
 IGS_NATIONAL        = PROCESSED / "igs_national.parquet"
 DELTA_PROFILE       = PROCESSED / "delta_profile.parquet"
 DELTA_PARQUET       = PROCESSED / "delta_full.parquet"

@@ -82,8 +82,7 @@ def sidebar_nav() -> None:
         st.page_link("pages/1_IGS_Landscape.py", label="1. IGS Landscape", icon="🗺️")
         st.page_link("pages/2_Delta_Deep_Dive.py", label="2. Delta Deep Dive", icon="🔍")
         st.page_link("pages/3_ML_Discovery.py", label="3. What Drives Turnaround?", icon="🧠")
-        st.page_link("pages/4_The_Prescription.py", label="4. The Prescription", icon="🎯")
-        st.page_link("pages/5_Small_Business_Solutions.py", label="5. Small Business Solutions", icon="💡")
+        st.page_link("pages/4_Priority_Matrix.py", label="4. Priority Matrix", icon="🎯")
 
         st.markdown("""
 <hr style='border:none;border-top:1px solid #e5e7eb;margin:12px 0'>

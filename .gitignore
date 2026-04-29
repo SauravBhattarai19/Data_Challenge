@@ -1,9 +1,7 @@
-# ── Data (raw inputs, too large for GitHub) ──────────────────────────────────
+# ── Raw input data (large, not for GitHub) ───────────────────────────────────
 Data/
 
-# ── Generated / processed data outputs ───────────────────────────────────────
-# App-required files in data_processed/ ARE tracked (all under GitHub's 100 MB limit).
-# Exclude files that are not loaded by the Streamlit app or exceed the 100 MB limit:
+# ── Large processed files not needed by the Streamlit app ────────────────────
 
 # 131 MB shapefile — over GitHub's hard limit
 project/data_processed/raw/tl_2022_us_county/
@@ -23,12 +21,17 @@ project/data_processed/raw/hpsa_pc_county.parquet
 project/data_processed/raw/hpsa_mh_county.parquet
 project/data_processed/raw/mua_county.parquet
 
-# Build-stage files not loaded by the Streamlit app
+# Build-stage intermediates (not loaded by the app)
 project/data_processed/master_tract.parquet
 project/data_processed/shap_values.parquet
 project/data_processed/igs_improvement_model.parquet
+project/data_processed/delta_full.parquet
 
-project/reports/community_profiles/
+# Large trend file — replaced by pre-aggregated igs_trends_summary.parquet
+project/data_processed/igs_trends.parquet
+
+# Trained model binary — not needed at runtime; regenerate with --retrain
+project/data_processed/expanded_rf_model.pkl
 
 # ── Python artifacts ──────────────────────────────────────────────────────────
 __pycache__/
@@ -62,7 +65,7 @@ build/
 .DS_Store
 Thumbs.db
 
-# ── Planning & personal notes (root-level markdown) ───────────────────────────
+# ── Planning & personal notes ─────────────────────────────────────────────────
 claude_opus_plan.md
 claude_plan.md
 knowledge.md
@@ -70,3 +73,4 @@ last_brainstorm.md
 plan.md
 presentation_idea.txt
 presentation_script_final.txt
+project/reports/community_profiles/

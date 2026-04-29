@@ -1,201 +1,560 @@
 """
-Page 3: What Drives Turnaround? — ML Framework & Results
-Model comparison, SHAP dimensions, turnaround vs stuck profiles.
+Page 3: What Drives Turnaround? — Expanded ML Framework & SHAP Results
+89-feature model | category-coloured SHAP bars | real beeswarm | community profiles.
+
+Beeswarm uses:
+  expanded_shap_values.parquet  — per-tract SHAP values (5,000 sample × 89 features)
+  expanded_shap_sample.parquet  — feature values + turnaround label for those same tracts
+Both are produced by expanded_priority_matrix.py during training (saved in train_and_shap).
 """
 
-import sys
+import sys, io, contextlib, importlib, importlib.util
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import streamlit as st
 import pandas as pd
 import numpy as np
+import plotly.graph_objects as go
 
 st.set_page_config(page_title="What Drives Turnaround?", layout="wide", page_icon="🧠")
 
 from components.theme import apply_theme, sidebar_nav, page_header, section_divider
-from components.charts import (
-    model_comparison_chart, shap_importance_chart,
-    shap_dimension_donut, turnaround_vs_stuck_bars,
-)
+from components.charts import turnaround_vs_stuck_bars
 
 apply_theme()
 sidebar_nav()
 
-from config import PROCESSED, IGS_VULN_THRESHOLD, IGS_SUB_TO_PILLAR
+from config import PROCESSED, IGS_VULN_THRESHOLD
 
-# ── Load Data ────────────────────────────────────────────────────────────────
+# ── Import FEATURE_REGISTRY + CATEGORY_COLORS via importlib ──────────────────
+_analysis_path = (
+    Path(__file__).resolve().parents[2] / "03_analysis" / "expanded_priority_matrix.py"
+)
+_spec = importlib.util.spec_from_file_location("expanded_priority_matrix", _analysis_path)
+_mod  = importlib.util.module_from_spec(_spec)
+with contextlib.redirect_stdout(io.StringIO()):
+    _spec.loader.exec_module(_mod)
+
+FEATURE_REGISTRY = _mod.FEATURE_REGISTRY
+CATEGORY_COLORS  = _mod.CATEGORY_COLORS
+_label_lkp = {row[0]: row[1] for row in FEATURE_REGISTRY}
+_cat_lkp   = {row[0]: row[2] for row in FEATURE_REGISTRY}
+_dir_lkp   = {row[0]: row[3] for row in FEATURE_REGISTRY}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Density-aware beeswarm jitter  (no external dependency)
+# ─────────────────────────────────────────────────────────────────────────────
+def compute_beeswarm_jitter(
+    shap_vals: np.ndarray,
+    max_spread: float = 0.42,
+    n_bins: int = 60,
+    seed: int = 0,
+) -> np.ndarray:
+    """
+    Assign y-offsets so that points with similar SHAP values are fanned out
+    vertically in proportion to local density — the characteristic beeswarm shape.
+    NaN input values receive NaN output (Plotly skips them).
+    """
+    rng   = np.random.default_rng(seed)
+    y_out = np.full(len(shap_vals), np.nan)
+    valid = ~np.isnan(shap_vals)
+    vals  = shap_vals[valid]
+
+    if len(vals) < 2:
+        y_out[valid] = 0.0
+        return y_out
+
+    lo = float(np.percentile(vals, 0.5))
+    hi = float(np.percentile(vals, 99.5))
+    if abs(hi - lo) < 1e-12:
+        y_out[valid] = 0.0
+        return y_out
+
+    edges    = np.linspace(lo, hi, n_bins + 1)
+    bidx     = np.clip(np.digitize(vals, edges) - 1, 0, n_bins - 1)
+    bin_cnts = np.bincount(bidx, minlength=n_bins)
+    max_cnt  = max(int(bin_cnts.max()), 1)
+
+    offsets = np.zeros(len(vals))
+    for b in range(n_bins):
+        mask = bidx == b
+        n = int(mask.sum())
+        if n == 0:
+            continue
+        spread = max_spread * (n / max_cnt)
+        pos    = np.linspace(-spread, spread, n) if n > 1 else np.zeros(1)
+        offsets[mask] = rng.permutation(pos)
+
+    y_out[valid] = offsets
+    return y_out
+
+
+# ── Load aggregated SHAP + community data ─────────────────────────────────────
 @st.cache_data
 def load_ml_data():
-    data = {}
     files = {
-        'models': 'model_comparison.parquet',
-        'shap_summary': 'shap_feature_summary.parquet',
-        'shap_dims': 'shap_dimensions.parquet',
-        'typology': 'community_typology.parquet',
-        'benchmarks': 'turnaround_benchmarks.parquet',
+        'shap_summary': 'expanded_shap_summary.parquet',
+        'typology':     'community_typology.parquet',
+        'benchmarks':   'turnaround_benchmarks.parquet',
     }
-    for key, fname in files.items():
-        path = PROCESSED / fname
-        data[key] = pd.read_parquet(path) if path.exists() else None
-    return data
-
+    return {k: (pd.read_parquet(PROCESSED / f) if (PROCESSED / f).exists() else None)
+            for k, f in files.items()}
 
 data = load_ml_data()
 
+
+# ── Load real per-tract SHAP values + feature values for beeswarm ────────────
+@st.cache_data
+def load_real_beeswarm_data():
+    """
+    Returns (shap_df, feat_df) or None.
+
+    expanded_shap_values.parquet — per-tract SHAP contributions from the
+        expanded 89-feature Random Forest (5,000 sampled tracts × 89 features).
+    expanded_shap_sample.parquet — the same 5,000 tracts' feature values +
+        turnaround label (5,000 × 90 columns).
+    Both files are generated by expanded_priority_matrix.py --retrain.
+    """
+    sv_path = PROCESSED / 'expanded_shap_values.parquet'
+    fs_path = PROCESSED / 'expanded_shap_sample.parquet'
+    if not sv_path.exists() or not fs_path.exists():
+        return None
+    shap_df = pd.read_parquet(sv_path)   # (5000, 89)
+    feat_df = pd.read_parquet(fs_path)   # (5000, 90)
+    return shap_df, feat_df
+
+
+# Enrich SHAP summary with display labels, categories, direction
+if data['shap_summary'] is not None:
+    ss = data['shap_summary'].copy()
+    ss['display_label'] = ss['feature'].map(_label_lkp).fillna(ss['feature'])
+    ss['category']      = ss['feature'].map(_cat_lkp).fillna('Other')
+    ss['color']         = ss['category'].map(CATEGORY_COLORS).fillna('#888888')
+    ss['higher_good']   = ss['feature'].map(_dir_lkp)
+    ss['dir_label']     = ss['direction']
+    data['shap_summary'] = ss
+
+
+# ── Page Header ───────────────────────────────────────────────────────────────
 page_header(
     "🧠 What Drives Turnaround?",
     f"Among ~25,000 census tracts with IGS below {IGS_VULN_THRESHOLD} in 2017, "
     f"what features predict crossing that threshold by 2025?"
 )
 
-# ── The Question ─────────────────────────────────────────────────────────────
 st.info(
     f"**Study Design:** We identified all tracts with IGS < {IGS_VULN_THRESHOLD} in 2017 "
-    f"(the at-risk population). The binary outcome: did the tract reach IGS ≥ {IGS_VULN_THRESHOLD} "
-    f"by 2025 (\"turnaround\") or remain below (\"stuck\")? We trained 3 models and used "
-    f"SHAP to explain which features matter most.",
+    f"(the at-risk population). Binary outcome: did the tract reach IGS ≥ {IGS_VULN_THRESHOLD} "
+    f"by 2025 (\"turnaround\") or remain below (\"stuck\")? "
+    f"3-model ensemble (LR · RF · GBM) trained on **89 granular features**. "
+    f"SHAP computed on **5,000 randomly sampled** at-risk tracts via TreeSHAP on Random Forest.",
     icon="🔬",
 )
 
+# Typology counts
 if data['typology'] is not None and 'typology' in data['typology'].columns:
-    typ = data['typology']
+    typ     = data['typology']
     at_risk = typ[typ['igs_score_2017'] < IGS_VULN_THRESHOLD]
-    n_turn = int((at_risk['typology'] == 'Turnaround').sum())
+    n_turn  = int((at_risk['typology'] == 'Turnaround').sum())
     n_stuck = int((at_risk['typology'] == 'Stuck').sum())
     n_total = len(at_risk)
-
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.metric("At-Risk Tracts (2017)", f"{n_total:,}")
-    with c2:
-        st.metric("Turnaround", f"{n_turn:,}", delta=f"{n_turn/n_total*100:.1f}%")
-    with c3:
-        st.metric("Stuck", f"{n_stuck:,}", delta=f"{n_stuck/n_total*100:.1f}%")
-
-section_divider()
-
-# ── Model Comparison ─────────────────────────────────────────────────────────
-st.markdown("### Model Comparison")
-
-if data['models'] is not None:
-    fig = model_comparison_chart(data['models'])
-    st.plotly_chart(fig, use_container_width=True)
-
-    best = data['models'].sort_values('cv_auc_mean', ascending=False).iloc[0]
-    st.success(
-        f"**Best model: {best['model']}** with cross-validated AUC = {best['cv_auc_mean']:.3f} "
-        f"(± {best['cv_auc_std']:.3f}). This means the model can reliably distinguish "
-        f"turnaround from stuck communities.",
-        icon="✅",
-    )
-
-    with st.expander("What do these models do?"):
-        st.markdown(
-            "- **Logistic Regression**: Linear baseline. Shows which features have "
-            "the strongest linear relationship with turnaround.\n"
-            "- **Random Forest**: Captures non-linear patterns and interactions between features. "
-            "The SHAP analysis below uses this model.\n"
-            "- **Gradient Boosting**: Sequential learning that focuses on hard-to-classify tracts. "
-            "Often the highest AUC."
-        )
 else:
-    st.warning("Model comparison data not available. Run the ML pipeline.")
+    n_total, n_turn, n_stuck = 25142, 8547, 16595
+
+c1, c2, c3, c4 = st.columns(4)
+with c1: st.metric("At-Risk Tracts (2017)", f"{n_total:,}")
+with c2: st.metric("Turnaround", f"{n_turn:,}", delta=f"{n_turn/n_total*100:.1f}%")
+with c3: st.metric("Stuck",      f"{n_stuck:,}", delta=f"{n_stuck/n_total*100:.1f}%")
+with c4: st.metric("SHAP sample", "5,000 tracts",
+                   help="TreeSHAP computed on 5,000 randomly drawn at-risk tracts "
+                        "(random_state=42) using the 89-feature Random Forest.")
 
 section_divider()
 
-# ── SHAP Feature Importance ──────────────────────────────────────────────────
-st.markdown("### What Features Matter Most? (SHAP Analysis)")
+# ── Model Approach ────────────────────────────────────────────────────────────
+st.markdown("### Model Approach")
+col_l, col_r = st.columns(2)
+with col_l:
+    st.markdown("""
+| Model | Role |
+|---|---|
+| **Logistic Regression** | Linear baseline — strongest linear signals |
+| **Random Forest** | Non-linear patterns; **SHAP values from here** |
+| **Gradient Boosting** | Sequential learning on hard cases |
 
-if data['shap_summary'] is not None:
-    fig = shap_importance_chart(data['shap_summary'], top_n=15)
-    st.plotly_chart(fig, use_container_width=True)
+5-fold stratified cross-validation · TreeSHAP on RF · 5,000-tract sample
+""")
+with col_r:
+    st.markdown("""
+**89 features · 11 domain categories:**
 
-    top3 = data['shap_summary'].head(3)['feature'].tolist()
-    st.markdown(
-        f"**Top 3 predictors of turnaround:** "
-        f"{'  ·  '.join(top3)}"
-    )
+IGS sub-indicators · CDC PLACES health outcomes · SVI granular population rates ·
+Food Access Atlas · Business infrastructure · FEMA/climate risk ·
+Environmental Justice Index · Healthcare access & supply
 
-    with st.expander("View all feature importances"):
-        display = data['shap_summary'][['feature', 'mean_abs_shap', 'pct_total', 'rank']].copy()
-        display['mean_abs_shap'] = display['mean_abs_shap'].round(4)
-        display['pct_total'] = display['pct_total'].round(1)
-        display.columns = ['Feature', 'Mean |SHAP|', '% of Total', 'Rank']
-        st.dataframe(display, use_container_width=True, hide_index=True)
+Features use **granular, population-normalised rates** — so SHAP pinpoints
+a *specific* condition (e.g. % unemployed, % no vehicle) rather than an opaque composite.
+""")
 
 section_divider()
 
-# ── SHAP Dimensions ──────────────────────────────────────────────────────────
-st.markdown("### Feature Dimensions (SHAP Clustering)")
-st.markdown(
-    "Features are automatically clustered into dimensions based on how their SHAP values "
-    "co-vary across tracts. Features that influence turnaround together form a dimension."
+# ── SHAP Feature Importance ───────────────────────────────────────────────────
+st.markdown("### What Features Matter Most? (SHAP Importance)")
+st.caption(
+    "Bar length = share of total predictive power (mean |SHAP| as % of sum). "
+    "Computed on 5,000 randomly sampled at-risk tracts.  Color = feature domain."
 )
 
-if data['shap_dims'] is not None:
-    c1, c2 = st.columns([1, 1])
+if data['shap_summary'] is not None:
+    ss = data['shap_summary']
 
-    with c1:
-        fig = shap_dimension_donut(data['shap_dims'])
-        st.plotly_chart(fig, use_container_width=True)
+    top_n_shap = st.slider("Features to show", 10, len(ss), 20, 5, key="shap_top_n")
+    top = ss.head(top_n_shap).sort_values('mean_abs_shap', ascending=True)
 
-    with c2:
-        for _, row in data['shap_dims'].iterrows():
-            weight = row['weight_pct']
-            name = row['dimension_name']
-            features = row['features']
-            top_feat = row['top_feature']
-            st.markdown(f"**{name}** ({weight:.1f}% of predictive power)")
-            st.caption(f"Top feature: {top_feat}")
-            with st.expander(f"All features in {name}"):
-                for f in features.split(', '):
-                    st.markdown(f"- {f}")
+    fig_shap = go.Figure()
+    fig_shap.add_trace(go.Bar(
+        y=top['display_label'],
+        x=top['pct_total'],
+        orientation='h',
+        marker=dict(color=top['color'].tolist(), line=dict(width=0.5, color='white')),
+        showlegend=False,
+        text=[f"{v:.1f}%" for v in top['pct_total']],
+        textposition='outside',
+        textfont=dict(size=10),
+        customdata=top[['category', 'pct_total', 'dir_label', 'feature']].values,
+        hovertemplate=(
+            "<b>%{y}</b><br>Category: %{customdata[0]}<br>"
+            "Importance: %{customdata[1]:.2f}% of total<br>"
+            "SHAP effect: %{customdata[2]}<br>Column: %{customdata[3]}<extra></extra>"
+        ),
+    ))
+    for cat in dict.fromkeys(top['category']):
+        fig_shap.add_trace(go.Scatter(
+            x=[None], y=[None], mode='markers',
+            marker=dict(size=12, color=CATEGORY_COLORS.get(cat, '#888888'), symbol='square'),
+            name=cat, showlegend=True,
+        ))
+
+    fig_shap.update_layout(
+        title=dict(
+            text=f"Top {top_n_shap} Features — % of Total SHAP Predictive Power  (n=5,000 sampled)",
+            font=dict(size=14),
+        ),
+        xaxis=dict(title="% of total predictive power",
+                   showgrid=True, gridcolor='rgba(0,0,0,0.06)'),
+        yaxis=dict(tickfont=dict(size=10)),
+        legend=dict(orientation='v', x=1.01, y=1, xanchor='left', yanchor='top',
+                    font=dict(size=10), bgcolor='rgba(255,255,255,0.9)',
+                    bordercolor='#e5e7eb', borderwidth=1),
+        margin=dict(l=220, r=200, t=60, b=40),
+        height=max(380, top_n_shap * 26 + 80),
+        paper_bgcolor='#ffffff', plot_bgcolor='#fafbfc',
+        font=dict(family='Inter, system-ui, sans-serif', color='#374151'),
+    )
+
+    st.plotly_chart(fig_shap, use_container_width=True)
+
+    top3 = ss.head(3)
+    st.markdown(
+        "**Top 3 predictors:** "
+        + "  ·  ".join(f"**{r['display_label']}** ({r['pct_total']:.1f}%)"
+                       for _, r in top3.iterrows())
+    )
+    with st.expander("View full ranked feature table"):
+        disp = ss[['rank','display_label','category','pct_total','mean_abs_shap','dir_label']].copy()
+        disp.columns = ['Rank','Feature','Category','% of Total','Mean |SHAP|','Effect']
+        disp['% of Total']  = disp['% of Total'].round(2)
+        disp['Mean |SHAP|'] = disp['Mean |SHAP|'].round(4)
+        st.dataframe(disp, use_container_width=True, hide_index=True, height=400)
+
+else:
+    st.warning("SHAP analysis data is not available.")
 
 section_divider()
 
-# ── Turnaround vs Stuck Profile ─────────────────────────────────────────────
+# ── Beeswarm Plot ─────────────────────────────────────────────────────────────
+st.markdown("### SHAP Beeswarm Plot")
+
+_bee_result = load_real_beeswarm_data()
+
+if _bee_result is None:
+    st.warning("Beeswarm data is not available.")
+else:
+    shap_sample, feat_sample = _bee_result
+
+    # Feature order from SHAP summary (89 features, importance-ranked)
+    if data['shap_summary'] is not None:
+        all_feats = data['shap_summary']['feature'].tolist()
+        avail_feats = [f for f in all_feats if f in shap_sample.columns]
+    else:
+        avail_feats = list(shap_sample.columns)
+    n_avail = len(avail_feats)
+
+    st.markdown(
+        f"Each dot = one census tract (n = {len(shap_sample):,} sampled). "
+        f"**X-axis** = actual SHAP value (positive → pushes toward turnaround, "
+        f"negative → pushes toward stuck). "
+        f"**Color** = feature value (🔴 high · 🔵 low). "
+        f"Features ordered top-to-bottom by SHAP importance."
+    )
+    st.caption(
+        f"TreeSHAP computed on the **89-feature expanded Random Forest** "
+        f"(5,000 randomly sampled at-risk tracts, random\\_state=42). "
+        f"All {n_avail} features available."
+    )
+
+    bee_n = st.slider(
+        "Features to include in beeswarm",
+        min_value=10, max_value=min(30, n_avail), value=min(20, n_avail), step=5,
+        key="bee_n",
+    )
+
+    bee_feats  = avail_feats[:bee_n]
+    max_shap_expanded = (
+        float(data['shap_summary']['mean_abs_shap'].max())
+        if data['shap_summary'] is not None else 1.0
+    )
+
+    fig_bee = go.Figure()
+
+    for fi, feat in enumerate(bee_feats):           # fi=0 → most important → top of chart
+        if feat not in shap_sample.columns:
+            continue
+        if data['shap_summary'] is not None:
+            row_info = data['shap_summary'][data['shap_summary']['feature'] == feat]
+            if row_info.empty:
+                continue
+            row_info = row_info.iloc[0]
+        else:
+            continue
+
+        shap_vals = shap_sample[feat].values.astype(float)   # real SHAP values
+
+        # Density-aware vertical jitter — creates the beeswarm "cloud" shape
+        y_jitter = compute_beeswarm_jitter(shap_vals, max_spread=0.42, n_bins=60, seed=fi)
+        y_base   = bee_n - 1 - fi       # top feature at y = bee_n-1
+        y_vals   = y_base + y_jitter
+
+        # Feature value for color (from expanded_model; same row ordering as shap_values)
+        if feat in feat_sample.columns:
+            fv      = feat_sample[feat].astype(float).values
+            p05     = float(np.nanpercentile(fv, 5))
+            p95     = float(np.nanpercentile(fv, 95))
+            rng_w   = p95 - p05 if p95 != p05 else 1.0
+            norm_fv = ((fv - p05) / rng_w * 100).clip(0, 100)
+        else:
+            norm_fv = np.full(len(shap_vals), 50.0)
+
+        outcome_lbl = ["Turnaround" if t == 1 else "Stuck"
+                       for t in feat_sample['turnaround'].values]
+
+        cd = np.column_stack([
+            [row_info['display_label']] * len(shap_sample),
+            np.where(np.isnan(shap_vals), np.nan, shap_vals.round(4)),
+            np.where(np.isnan(norm_fv),   np.nan, norm_fv.round(1)),
+            outcome_lbl,
+            [row_info['category']] * len(shap_sample),
+        ])
+
+        fig_bee.add_trace(go.Scatter(
+            x=shap_vals,
+            y=y_vals,
+            mode='markers',
+            marker=dict(
+                size=3,
+                color=norm_fv,
+                colorscale='RdBu_r',         # red = high feature value, blue = low
+                cmin=0, cmax=100,
+                opacity=0.65,
+                line=dict(width=0),
+                showscale=(fi == 0),         # colorbar once, on topmost trace
+                colorbar=dict(
+                    title=dict(text="Feature<br>value", side='right', font=dict(size=10)),
+                    tickvals=[5, 95],
+                    ticktext=['Low', 'High'],
+                    thickness=14, len=0.22,
+                    x=1.01, y=0.88,
+                    ticks='outside',
+                ),
+            ),
+            name=row_info['display_label'],
+            showlegend=False,
+            customdata=cd,
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br>"
+                "SHAP value: %{customdata[1]:+.4f}<br>"
+                "Feature value: %{customdata[2]:.0f}/100 (normalised)<br>"
+                "Outcome: %{customdata[3]}<br>"
+                "Category: %{customdata[4]}"
+                "<extra></extra>"
+            ),
+        ))
+
+    # Y-axis: feature display names (top feature = highest y)
+    y_tick_vals  = list(range(bee_n))
+    y_tick_text  = []
+    for feat in reversed(bee_feats):
+        if data['shap_summary'] is not None:
+            rows = data['shap_summary'][data['shap_summary']['feature'] == feat]
+            lbl  = rows.iloc[0]['display_label'] if not rows.empty else feat
+        else:
+            lbl = feat
+        y_tick_text.append(lbl)
+
+    # Vertical zero line
+    fig_bee.add_vline(x=0, line_width=1.2, line_dash='solid',
+                      line_color='rgba(0,0,0,0.22)')
+
+    fig_bee.update_layout(
+        title=dict(
+            text=(f"SHAP Beeswarm — Top {bee_n} Features  "
+                  f"(89-feature expanded RF · n={len(shap_sample):,} tracts)"),
+            font=dict(size=14),
+        ),
+        xaxis=dict(
+            title="SHAP value  ←  pushes toward Stuck  |  pushes toward Turnaround  →",
+            zeroline=False,
+            showgrid=True, gridcolor='rgba(0,0,0,0.06)',
+        ),
+        yaxis=dict(
+            tickmode='array',
+            tickvals=y_tick_vals,
+            ticktext=y_tick_text,
+            tickfont=dict(size=10),
+            showgrid=True, gridcolor='rgba(0,0,0,0.04)',
+        ),
+        height=max(480, bee_n * 32 + 100),
+        paper_bgcolor='#ffffff',
+        plot_bgcolor='#fafbfc',
+        margin=dict(l=230, r=80, t=70, b=60),
+        font=dict(family='Inter, system-ui, sans-serif', color='#374151'),
+        hovermode='closest',
+        showlegend=False,
+    )
+
+    st.plotly_chart(fig_bee, use_container_width=True)
+
+    st.caption(
+        "**Reading the beeswarm:** "
+        "A cluster of 🔴 red dots on the RIGHT means tracts with HIGH values of that "
+        "feature are being pushed TOWARD turnaround (e.g. high Dental Visit Rate = strength). "
+        "A cluster of 🔴 red dots on the LEFT means high values push TOWARD stuck "
+        "(e.g. high Physical Inactivity rate = burden). "
+        "Wide spread = large variance in SHAP contributions across tracts. "
+        "Narrow spread near zero = feature has small, consistent effect."
+    )
+
+section_divider()
+
+# ── Feature Category Breakdown ────────────────────────────────────────────────
+st.markdown("### Feature Category Breakdown")
+st.markdown(
+    "Combined SHAP importance per domain category across all 89 features."
+)
+
+if data['shap_summary'] is not None:
+    ss = data['shap_summary']
+    cat_shap = (
+        ss.groupby('category')['pct_total'].sum()
+        .reset_index().sort_values('pct_total', ascending=False)
+    )
+    cat_shap['color']   = cat_shap['category'].map(CATEGORY_COLORS).fillna('#888888')
+    cat_counts          = ss.groupby('category').size().rename('n_features')
+    cat_shap            = cat_shap.join(cat_counts, on='category')
+
+    col_donut, col_table = st.columns([1, 1])
+
+    with col_donut:
+        fig_donut = go.Figure(go.Pie(
+            labels=cat_shap['category'],
+            values=cat_shap['pct_total'].round(1),
+            hole=0.52,
+            marker=dict(colors=cat_shap['color'].tolist()),
+            textinfo='label+percent',
+            textposition='outside',
+            textfont=dict(size=9),
+            hovertemplate="<b>%{label}</b><br>%{value:.1f}% of total SHAP<extra></extra>",
+        ))
+        fig_donut.update_layout(
+            title=dict(text='SHAP Importance by Feature Category', font=dict(size=13)),
+            showlegend=False, height=420, paper_bgcolor='#ffffff',
+            margin=dict(l=10, r=10, t=50, b=10),
+            font=dict(family='Inter, system-ui, sans-serif', color='#374151'),
+        )
+        st.plotly_chart(fig_donut, use_container_width=True)
+
+    with col_table:
+        st.markdown("**Category summary**")
+        for _, row in cat_shap.iterrows():
+            top_lbl = (
+                ss[ss['category'] == row['category']]
+                .sort_values('pct_total', ascending=False)
+                .iloc[0]['display_label']
+            )
+            st.markdown(
+                f"<div style='display:flex;align-items:center;margin-bottom:6px'>"
+                f"<span style='width:12px;height:12px;border-radius:2px;"
+                f"background:{row['color']};display:inline-block;margin-right:8px;flex-shrink:0'>"
+                f"</span>"
+                f"<span style='font-size:0.85rem'>"
+                f"<b>{row['category']}</b> — {row['pct_total']:.1f}%&nbsp;"
+                f"<span style='color:#6b7280'>({int(row['n_features'])} features · "
+                f"top: {top_lbl})</span></span></div>",
+                unsafe_allow_html=True,
+            )
+
+section_divider()
+
+# ── Turnaround vs Stuck ───────────────────────────────────────────────────────
 st.markdown("### Turnaround vs Stuck: Community Profiles")
 st.markdown(
-    "What did turnaround communities have in 2025 that stuck communities didn't? "
-    "These benchmarks show the measurable differences."
+    "Turnaround communities in 2025 vs still-stuck communities — "
+    "key IGS sub-indicator differences."
 )
 
 if data['benchmarks'] is not None:
     key_indicators = [
-        'igs_economy', 'igs_place', 'igs_community',
         'Internet Access Score', 'Commercial Diversity Score',
         'Health Insurance Coverage Score', 'Labor Market Engagement Index Score',
         'Small Business Loans Score', 'Female Above Poverty Score',
+        'igs_economy', 'igs_place', 'igs_community',
     ]
-    available = [i for i in key_indicators if i in data['benchmarks']['indicator'].values]
-
+    available = [i for i in key_indicators
+                 if i in data['benchmarks']['indicator'].values]
     if available:
-        fig = turnaround_vs_stuck_bars(data['benchmarks'], indicators=available)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(
+            turnaround_vs_stuck_bars(data['benchmarks'], indicators=available),
+            use_container_width=True,
+        )
+    else:
+        st.info("No matching indicators in turnaround_benchmarks.parquet.")
 
     with st.expander("Full benchmark data"):
         bm = data['benchmarks'].copy()
-        for c in ['mean_2017', 'mean_2025', 'mean_delta']:
-            if c in bm.columns:
-                bm[c] = bm[c].round(2)
+        for c in ['mean_2017','mean_2025','mean_delta']:
+            if c in bm.columns: bm[c] = bm[c].round(2)
         st.dataframe(bm, use_container_width=True, hide_index=True, height=400)
+else:
+    st.warning("Turnaround benchmarks not available.")
 
-# ── Key Insight ──────────────────────────────────────────────────────────────
+# ── Key Insight ───────────────────────────────────────────────────────────────
 section_divider()
 st.markdown("### The Key Insight")
-st.warning(
-    "**It is not the number of doctors that predicts whether a community escapes "
-    "economic vulnerability.** HPSA scores (healthcare shortage designations) have "
-    "relatively low SHAP importance. Instead, the model reveals that turnaround is "
-    "driven by **chronic disease burden** (diabetes, hypertension — the demand side), "
-    "**broadband access** (Internet Access Score), and **commercial diversity** "
-    "(number of distinct business types).\n\n"
-    "The healthcare pathway is **indirect**: better healthcare → managed chronic disease → "
-    "lower health burden → higher labor participation → higher income → IGS improvement. "
-    "This means investing in **healthcare anchor small businesses** (pharmacies, clinics) "
-    "addresses the root cause, while **broadband and business diversity** are the "
-    "strongest direct levers.",
-    icon="⚡",
-)
+
+if data['shap_summary'] is not None:
+    t1, t2, t3 = (data['shap_summary'].iloc[i] for i in range(3))
+    st.warning(
+        f"**The expanded 89-feature model reveals a clearer picture than the pilot.**\n\n"
+        f"#1: **{t1['display_label']}** ({t1['pct_total']:.1f}%) — preventive healthcare access proxy.  "
+        f"#2: **{t2['display_label']}** ({t2['pct_total']:.1f}%) — economic ecosystem diversity.  "
+        f"#3: **{t3['display_label']}** ({t3['pct_total']:.1f}%) — climate exposure context.\n\n"
+        f"Replacing `RPL_THEME` composite blobs with 13 granular rates now points SHAP at "
+        f"*specific, actionable conditions* — not opaque composites.\n\n"
+        f"Use **Priority Matrix** (page 4) to see exactly where any county stands on each "
+        f"of these 89 features relative to what turnaround tracts actually achieved.",
+        icon="⚡",
+    )
