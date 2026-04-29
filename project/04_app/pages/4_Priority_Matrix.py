@@ -110,6 +110,26 @@ page_header(
     "— powered by SHAP feature importance.",
 )
 
+with st.expander("How to use this page", expanded=False):
+    st.markdown(
+        "The Priority Matrix answers a single question: **where should this county invest first?**\n\n"
+        "Each feature is plotted on two axes simultaneously:\n"
+        "- **Vertical axis (SHAP importance):** how strongly this feature predicts national "
+        "turnaround — fixed, model-derived.\n"
+        "- **Horizontal axis (Gap from turnaround benchmark):** how far behind this county "
+        "currently lags — county-specific.\n\n"
+        "**Quadrant guide:**\n"
+        "- **Act Now** (top-right): high importance + large gap → top investment priority.\n"
+        "- **Protect** (top-left): high importance + small/no gap → preserve existing strength.\n"
+        "- **Second Wave** (bottom-right): moderate importance + large gap → phase-2 priorities.\n"
+        "- **Monitor** (bottom-left): lower importance + small gap → watch and wait.\n\n"
+        "**Tips:**\n"
+        "- Use the **County Selector** in the sidebar to switch between counties or view the full Delta region.\n"
+        "- Adjust **SHAP / Gap thresholds** in Display Settings to raise or lower the quadrant boundaries.\n"
+        "- Use **Filter Categories** to focus on a specific domain (e.g., only Health or only Business).\n"
+        "- Hover over any dot in the scatter plot for feature name, SHAP share, and gap value."
+    )
+
 # ── Tract count guard ─────────────────────────────────────────────────────────
 if target != "delta":
     n_tracts = int((df["county_fips5"] == target).sum())

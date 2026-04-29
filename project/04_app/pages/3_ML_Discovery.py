@@ -146,6 +146,23 @@ page_header(
     f"what features predict crossing that threshold by 2025?"
 )
 
+with st.expander("How to use this page", expanded=False):
+    st.markdown(
+        "This page reveals **what machine learning found** about community economic recovery — "
+        "which factors truly predict whether a distressed tract turns around.\n\n"
+        "- **SHAP Importance chart**: drag the slider to show more or fewer features. "
+        "Bar length = share of the model's total predictive power. Color = feature category. "
+        "Hover for exact values.\n"
+        "- **Beeswarm plot**: each dot is a census tract. Position left/right = SHAP contribution "
+        "(right = pushes toward turnaround). Dot color = feature value (red = high, blue = low). "
+        "Use the dropdown to switch between features.\n"
+        "- **Category breakdown**: see which *domains* (Health, Business, Broadband, etc.) "
+        "account for the most predictive power, and how those domains differ between "
+        "turnaround and stuck tracts.\n"
+        "- **Turnaround vs Stuck comparison**: look at any feature's average value in "
+        "communities that recovered vs those that didn't."
+    )
+
 st.info(
     f"**Study Design:** We identified all tracts with IGS < {IGS_VULN_THRESHOLD} in 2017 "
     f"(the at-risk population). Binary outcome: did the tract reach IGS ≥ {IGS_VULN_THRESHOLD} "

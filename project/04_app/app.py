@@ -92,6 +92,11 @@ st.markdown(
 )
 st.caption("Jackson State University · Grand Finale April 30, 2026")
 
+st.markdown(
+    "**Live app:** [howtoimprove.streamlit.app](https://howtoimprove.streamlit.app) &nbsp;|&nbsp; "
+    "**Code:** [github.com/SauravBhattarai19/Data_Challenge](https://github.com/SauravBhattarai19/Data_Challenge)"
+)
+
 st.divider()
 
 # ── Key Statistics ───────────────────────────────────────────────────────────

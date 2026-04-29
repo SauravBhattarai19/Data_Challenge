@@ -57,6 +57,24 @@ page_header(
     "from county summaries down to individual census tracts."
 )
 
+with st.expander("How to use this page", expanded=False):
+    st.markdown(
+        "This page lets you **explore every available data dimension** for the Mississippi Delta "
+        "at both the county and census-tract level.\n\n"
+        "- **County Overview table** at the top summarizes IGS scores and pillar values for "
+        "all 9 Delta counties side by side.\n"
+        "- **Select a county** from the dropdown to drill into that county's tracts, "
+        "or keep 'All Delta' for the regional picture.\n"
+        "- **IGS Pillar radar chart** shows how the selected county compares to the national "
+        "average across Economy, Place, and Community.\n"
+        "- **Tabs (Health Outcomes, Healthcare Access, Social Vulnerability, Business)** "
+        "show the underlying dataset detail for the selected area.\n"
+        "- **Census Tract table** ranks all tracts by IGS score so you can identify the "
+        "most distressed neighborhoods.\n"
+        "- **Tract Map** colors each census tract by your chosen indicator — "
+        "toggle the FQHC overlay to see where healthcare clinics are located."
+    )
+
 # ── County Summary ───────────────────────────────────────────────────────────
 st.markdown("### County Overview")
 

@@ -41,6 +41,20 @@ page_header(
     "Explore by overall score or by Place, Community, and Economy pillars."
 )
 
+with st.expander("How to use this page", expanded=False):
+    st.markdown(
+        "This page gives you a **national view** of the Mastercard Inclusive Growth Score (IGS) "
+        "across all US counties.\n\n"
+        "- **Use the sidebar filters** to zoom into a specific state or focus only on "
+        "counties that contain economically vulnerable tracts (IGS < 45).\n"
+        "- **Explore the choropleth map** to see geographic patterns — hover over any county "
+        "for its mean IGS score.\n"
+        "- **Switch between pillars** (Economy, Place, Community) to see which dimension is "
+        "driving county-level scores up or down.\n"
+        "- **Bottom tables** rank the lowest-scoring counties nationally — useful starting "
+        "points for identifying where intervention is most needed."
+    )
+
 # ── Filters ──────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("### Filters")

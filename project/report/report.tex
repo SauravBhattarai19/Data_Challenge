@@ -254,8 +254,14 @@ stand out:
 \begin{enumerate}[leftmargin=*, itemsep=2pt]
   \item \textbf{Preventive dental care} (\emph{Dental Visit Rate},
     9.2\%) is the single strongest predictor—stronger than any
-    economic or housing feature.  Communities where residents regularly
-    access dental care exhibit systematically better turnaround odds.
+    economic or housing feature.  The CDC~PLACES dental-visit rate
+    measures the share of adults who visited a dentist or dental clinic
+    in the past year (higher = better).  Turnaround tracts average
+    56.9\%; the MS Delta averages only 6.1\%—a 50.8-point gap placing
+    the Delta at the \textbf{1st percentile nationally}.  The SHAP
+    relationship is monotonically positive (Spearman $\rho > 0$):
+    every decile rise in dental-visit access pushes SHAP contributions
+    toward turnaround.
 
   \item \textbf{Commercial diversity} (8.8\%) is the top economic
     predictor, outranking broadband access, income, and business
@@ -265,6 +271,45 @@ stand out:
     \textbf{physical inactivity} (6.4\%) follow, confirming that
     health behaviors and asset endowments jointly predict recovery.
 \end{enumerate}
+
+\subsection*{Why Dental Access? A Proxy for Economic Connectivity}
+
+The dental finding is counterintuitive at first glance but robust
+across multiple validation approaches.  We propose four reinforcing
+mechanisms:
+
+\begin{enumerate}[leftmargin=*, itemsep=2pt, label=\alph*.]
+  \item \textbf{Economic connectivity proxy.}  Dental-visit rate
+    correlates strongly with Internet Access Score ($r = 0.469$).
+    Both measure whether households are embedded in a functioning
+    service economy—broadband at home and a nearby dental provider
+    are co-produced by the same infrastructure and income conditions.
+
+  \item \textbf{Healthcare system engagement.}  Preventive dental
+    visits require stable transportation, health-seeking behavior,
+    insurance coverage, and provider supply.  Communities where
+    most adults navigate this system have already solved coordination
+    problems that block recovery more broadly.  All nine Delta
+    counties are 100\% designated as Primary Care Health Professional
+    Shortage Areas (HPSAs), reflecting how completely the healthcare
+    infrastructure has collapsed in the region.
+
+  \item \textbf{Workforce productivity.}  Untreated dental disease
+    is a well-documented cause of absenteeism and presenteeism.
+    Low dental-visit rates therefore predict lower effective labor
+    supply in the following year—a direct drag on economic output.
+
+  \item \textbf{Income and insurance signal.}  Regular dental visits
+    proxy for employer-sponsored insurance and sufficient disposable
+    income.  A community with high dental access has a more stable
+    earnings base, reducing sensitivity to local shocks.
+\end{enumerate}
+
+\noindent The implication is precise: closing the dental-access gap
+in the Delta is not a ``health'' intervention in isolation—it is an
+\emph{economic infrastructure} intervention that simultaneously
+addresses workforce productivity, healthcare engagement, and the
+proxy conditions that underpin commercial-ecosystem growth.
 
 \begin{figure}[ht]
   \centering
@@ -446,26 +491,60 @@ level.
 permits), and the Streamlit dashboard are available at
 \href{https://github.com/SauravBhattarai19/Data_Challenge}%
 {\texttt{github.com/SauravBhattarai19/Data\_Challenge}}.
+The live interactive application is publicly accessible at
+\href{https://howtoimprove.streamlit.app}{\texttt{howtoimprove.streamlit.app}}.
 
 % ─────────────────────────────────────────────────────────────
 \section*{Data Sources}
 % ─────────────────────────────────────────────────────────────
 
-\begin{tabular}{@{}p{4cm}p{8cm}@{}}
+\small
+\begin{tabular}{@{}p{2.6cm}p{2.8cm}p{1.0cm}p{6.5cm}@{}}
 \toprule
-\textbf{Dataset} & \textbf{Source} \\
+\textbf{Dataset} & \textbf{Producer} & \textbf{Year} & \textbf{Key variables used} \\
 \midrule
-Mastercard IGS  & Mastercard Economics Institute (2017–2025) \\
-CDC PLACES      & CDC PLACES Community Health Data (2022) \\
-CDC SVI         & ATSDR Social Vulnerability Index (2022) \\
-USDA Food Atlas & USDA Economic Research Service (2019) \\
-FEMA NRI        & FEMA National Risk Index (2023) \\
-CDC EJI         & CDC Environmental Justice Index (2022) \\
-HRSA HPSA/MUA   & Health Resources \& Services Administration (2024) \\
-AHRF            & Area Health Resources File (2024–25) \\
-Census CBP/ZBP  & County Business Patterns / ZIP Business Patterns (2023) \\
-SBA Rankings    & Small Business Administration State Rankings (2025) \\
+Mastercard IGS &
+  Mastercard Economics Institute &
+  2017–25 &
+  igs\_score, igs\_economy, igs\_place, igs\_community + 9 sub-indicators (tract level) \\[4pt]
+CDC PLACES &
+  CDC / BRFSS &
+  2022 &
+  27 chronic-disease prevalence rates: DENTAL, BPHIGH, OBESITY, PHLTH, CSMOKING, CHECKUP, \ldots \\[4pt]
+CDC SVI &
+  ATSDR &
+  2022 &
+  4 RPL\_THEME composite percentiles replaced by 13 normalized sub-indicator rates (poverty, disability, housing cost burden, etc.) \\[4pt]
+USDA Food Atlas &
+  USDA ERS &
+  2019 &
+  LACCESS\_POP10, PCT\_SNAP17, PCT\_NSLP17, PCT\_REDUCED\_LUNCH, food-retail access flags \\[4pt]
+FEMA NRI &
+  FEMA &
+  2023 &
+  RISK\_SCORE (composite natural hazard risk), 18 individual hazard scores \\[4pt]
+CDC EJI &
+  CDC ATSDR &
+  2022 &
+  Environmental burden index, social vulnerability, health vulnerability \\[4pt]
+HRSA HPSA / MUA &
+  HRSA &
+  2024 &
+  Primary care \& mental health HPSA scores/flags, MUA/MUP designation \\[4pt]
+AHRF &
+  HRSA BHPr &
+  2024–25 &
+  Physician, specialist, hospital counts; Medicare/Medicaid enrollment rates; county health infrastructure \\[4pt]
+CBP / ZBP &
+  US Census Bureau &
+  2023 &
+  Establishment counts by NAICS sector, employment, annual payroll (county \& ZIP) \\[4pt]
+SBA Rankings &
+  US Small Business Administration &
+  2025 &
+  State-level small-business counts, net new jobs, women-owned \%, SB employment share \\
 \bottomrule
 \end{tabular}
+\normalsize
 
 \end{document}
