@@ -5,6 +5,7 @@ plotly>=5.18
 pyarrow>=14
 folium>=0.15
 streamlit-folium>=0.20
+branca>=0.7
 scikit-learn>=1.4
 shap>=0.45
 matplotlib>=3.8

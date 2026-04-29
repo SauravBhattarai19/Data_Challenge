@@ -306,6 +306,6 @@ if geojson_path:
             fqhc_df=fqhc_delta if show_fqhc else None,
             show_fqhc=show_fqhc,
         )
-        st_folium(m, width=None, height=500, returned_objects=[])
+        st_folium(m, use_container_width=True, height=500, returned_objects=[])
 else:
     st.info("Tract-level map data is not available for this view.")

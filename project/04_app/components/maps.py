@@ -130,14 +130,13 @@ def make_delta_folium_map(
 ) -> object:
     """
     Folium choropleth for Delta census tracts.
-    Supports numeric columns (linear colormap) or categorical ``typology``.
-    HPSA column ``pc_hpsa_score_max`` is clipped to 0–26 for coloring.
+    Reads GeoJSON directly (no geopandas) and injects data values into feature properties.
+    Supports numeric columns (linear colormap) or categorical typology.
     """
     import folium
     from branca.colormap import LinearColormap
 
-    center_lat = 33.5
-    center_lon = -90.7
+    center_lat, center_lon = 33.5, -90.7
     m = folium.Map(
         location=[center_lat, center_lon],
         zoom_start=9,
@@ -150,25 +149,35 @@ def make_delta_folium_map(
             add_fqhc_markers(m, fqhc_df)
         return m
 
-    import geopandas as gpd
+    # Load GeoJSON as plain dict — no geopandas needed
+    with open(geojson_path, encoding="utf-8") as f:
+        geojson_data = json.load(f)
 
-    gdf = gpd.read_file(str(geojson_path))
-    gdf["GEOID"] = gdf["GEOID"].astype(str)
-    delta_df = delta_df.copy()
-    delta_df["GEOID"] = delta_df["GEOID"].astype(str)
-
-    merge_cols = ["GEOID", color_col]
+    # Build GEOID → row lookup from delta_df
+    needed = [color_col]
     for extra in ("igs_score", "typology", "pc_hpsa_score_max"):
-        if extra in delta_df.columns and extra not in merge_cols:
-            merge_cols.append(extra)
+        if extra in delta_df.columns and extra not in needed:
+            needed.append(extra)
 
-    merged = gdf.merge(
-        delta_df[merge_cols].drop_duplicates("GEOID"),
-        on="GEOID",
-        how="inner",
+    delta_lkp = (
+        delta_df[["GEOID"] + needed]
+        .copy()
+        .assign(GEOID=lambda d: d["GEOID"].astype(str))
+        .drop_duplicates("GEOID")
+        .set_index("GEOID")
+        .to_dict(orient="index")
     )
 
-    if len(merged) == 0 or color_col not in merged.columns:
+    # Inject values into GeoJSON feature properties
+    matched = 0
+    for feature in geojson_data["features"]:
+        geoid = str(feature["properties"].get("GEOID", ""))
+        row = delta_lkp.get(geoid, {})
+        feature["properties"].update(row)
+        if row:
+            matched += 1
+
+    if matched == 0 or color_col not in next(iter(delta_lkp.values()), {}):
         if show_fqhc and fqhc_df is not None:
             add_fqhc_markers(m, fqhc_df)
         return m
@@ -176,88 +185,65 @@ def make_delta_folium_map(
     is_categorical = color_col == "typology"
 
     if is_categorical:
-        merged["_typ_cat"] = merged[color_col].fillna("Unknown").astype(str)
-        merged["_typ_cat"] = merged["_typ_cat"].replace("", "Unknown")
-
         def _style_typology(feature):
-            cat = feature["properties"].get("_typ_cat", "Unknown")
+            cat = str(feature["properties"].get(color_col) or "Unknown")
             fill = TYPOLOGY_COLORS.get(cat, TYPOLOGY_COLORS["Unknown"])
-            return {
-                "fillColor": fill,
-                "color": "#6b7280",
-                "weight": 1,
-                "fillOpacity": 0.72,
-            }
+            return {"fillColor": fill, "color": "#6b7280", "weight": 1, "fillOpacity": 0.72}
 
-        tooltip_fields = ["GEOID", "_typ_cat"]
-        tooltip_aliases = ["Tract:", "Typology:"]
-        if "igs_score" in merged.columns:
-            tooltip_fields.append("igs_score")
-            tooltip_aliases.append("IGS Score:")
+        tt_fields  = ["GEOID", color_col]
+        tt_aliases = ["Tract:", "Typology:"]
+        if "igs_score" in needed and color_col != "igs_score":
+            tt_fields.append("igs_score"); tt_aliases.append("IGS Score:")
 
         folium.GeoJson(
-            merged.to_json(),
+            geojson_data,
             style_function=_style_typology,
-            tooltip=folium.GeoJsonTooltip(
-                fields=tooltip_fields,
-                aliases=tooltip_aliases,
-                style="font-size:12px;",
-            ),
+            tooltip=folium.GeoJsonTooltip(fields=tt_fields, aliases=tt_aliases,
+                                          style="font-size:12px;"),
         ).add_to(m)
+
     else:
         if color_col == "pc_hpsa_score_max":
-            merged["_map_z"] = merged[color_col].clip(0, 26).fillna(0.0)
             vmin, vmax = 0.0, 26.0
         else:
-            merged["_map_z"] = merged[color_col]
-            valid = merged["_map_z"].dropna()
-            if len(valid) == 0:
+            raw_vals = [
+                feature["properties"].get(color_col)
+                for feature in geojson_data["features"]
+            ]
+            vals = [float(v) for v in raw_vals if v is not None]
+            if not vals:
                 if show_fqhc and fqhc_df is not None:
                     add_fqhc_markers(m, fqhc_df)
                 return m
-            vmin = float(valid.min())
-            vmax = float(valid.max())
+            vmin, vmax = min(vals), max(vals)
             if vmin == vmax:
                 vmax = vmin + 1e-6
-            merged["_map_z"] = merged["_map_z"].fillna(vmin)
 
         colormap = LinearColormap(
             colors=["#dc2626", "#f97316", "#eab308", "#22c55e", "#059669"],
-            vmin=vmin,
-            vmax=vmax,
-            caption=color_label,
+            vmin=vmin, vmax=vmax, caption=color_label,
         )
 
         def _style_numeric(feature):
-            z = feature["properties"].get("_map_z", vmin)
+            z = feature["properties"].get(color_col)
             try:
-                zf = float(z)
+                zf = float(z) if z is not None else vmin
+                zf = max(vmin, min(vmax, zf))
             except (TypeError, ValueError):
                 zf = vmin
-            return {
-                "fillColor": colormap(zf),
-                "color": "#6b7280",
-                "weight": 1,
-                "fillOpacity": 0.7,
-            }
+            return {"fillColor": colormap(zf), "color": "#6b7280", "weight": 1,
+                    "fillOpacity": 0.7}
 
-        tooltip_fields = ["GEOID", color_col]
-        tooltip_aliases = ["Tract:", f"{color_label}:"]
-        if color_col != "igs_score" and "igs_score" in merged.columns:
-            tooltip_fields.append("igs_score")
-            tooltip_aliases.append("IGS Score:")
-        if color_col != "typology" and "typology" in merged.columns:
-            tooltip_fields.append("typology")
-            tooltip_aliases.append("Typology:")
+        tt_fields  = ["GEOID", color_col]
+        tt_aliases = ["Tract:", f"{color_label}:"]
+        if color_col != "igs_score" and "igs_score" in needed:
+            tt_fields.append("igs_score"); tt_aliases.append("IGS Score:")
 
         folium.GeoJson(
-            merged.to_json(),
+            geojson_data,
             style_function=_style_numeric,
-            tooltip=folium.GeoJsonTooltip(
-                fields=tooltip_fields,
-                aliases=tooltip_aliases,
-                style="font-size:12px;",
-            ),
+            tooltip=folium.GeoJsonTooltip(fields=tt_fields, aliases=tt_aliases,
+                                          style="font-size:12px;"),
         ).add_to(m)
         colormap.add_to(m)
 
