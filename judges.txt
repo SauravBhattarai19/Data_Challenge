@@ -1,0 +1,176 @@
+================================================================================
+  HEALTHY ECONOMIES, HEALTHY COMMUNITIES
+  Mastercard IGS × AUC 2026 Data Science Challenge — Jackson State University
+================================================================================
+
+WHERE TO START
+──────────────
+Live app  →  https://howtoimprove.streamlit.app
+Code      →  https://github.com/SauravBhattarai19/Data_Challenge
+Report    →  project/report/report.pdf  (9 pages, read this first)
+
+The PDF gives the complete picture in ~10 minutes. Everything below maps to it.
+
+
+THE QUESTION
+────────────
+Among the 25,142 US census tracts with IGS < 45 in 2017, only 34% crossed that
+threshold by 2025. The MS Delta's rate was just 24%. We asked: what, precisely,
+separates communities that escaped from those that stayed stuck?
+
+
+THE FLOW  (follow this order in the app)
+─────────────────────────────────────────
+1. HOME PAGE
+   The problem in numbers. IGS trajectory chart shows the Delta has been ~13
+   points below the national mean every year since 2017 — and has never once
+   crossed the vulnerability threshold of 45.
+
+2. IGS LANDSCAPE  (Page 1)
+   National choropleth. Use the sidebar to filter by state or pillar. This sets
+   geographic context: the Delta is not just poor — it is outlier-poor.
+
+3. DELTA DEEP DIVE  (Page 2)
+   Select a county (or All Delta) to see every indicator: health outcomes,
+   healthcare access, social vulnerability, business landscape, and a tract-level
+   Folium map you can color by any variable. The FQHC overlay shows clinic sites.
+
+4. WHAT DRIVES TURNAROUND?  (Page 3)  ← THE KEY PAGE
+   This is where the machine learning results live.
+
+   - SHAP Importance chart: 89 features ranked by mean |SHAP|.
+     Top finding: DENTAL_CrudePrev (dental visit rate) = 9.2% of total
+     predictive power — #1 across all domains, above broadband, income,
+     or any housing variable.
+
+   - Beeswarm plot: each dot = one census tract; x-axis = SHAP contribution;
+     color = feature value (red = high, blue = low).
+     For dental: red dots cluster RIGHT (high dental access → turnaround),
+     blue dots cluster LEFT (low access → stuck). Monotone positive effect.
+
+   - Category breakdown: Health Outcomes + IGS sub-indicators = ~50% of all
+     SHAP importance. Business Infrastructure is the second-largest domain gap.
+
+5. INVESTMENT PRIORITY MATRIX  (Page 4)  ← THE ACTIONABLE OUTPUT
+   Select any of the 9 MS Delta counties from the sidebar (or the full region).
+   Each feature gets plotted on two axes:
+     X = gap from the turnaround benchmark (county-specific)
+     Y = SHAP importance (national, fixed)
+
+   Quadrants:
+     ACT NOW     — high importance + large gap       → invest here first
+     PROTECT     — high importance + small/no gap    → do not disrupt
+     SECOND WAVE — lower importance + large gap      → phase-2
+     MONITOR     — lower importance + small gap      → watch and wait
+
+   Thresholds are adjustable. Filter by feature category to focus.
+
+
+THE HEADLINE FINDING — DENTAL ACCESS
+──────────────────────────────────────
+Why is dental visit rate the #1 predictor? It is counterintuitive but robust.
+
+  Turnaround tracts average:  56.9%  dental visit rate
+  MS Delta average:            6.1%  dental visit rate
+  Gap:                        50.8 percentage points
+  Delta's national rank:      1st percentile
+
+Spearman correlation (feature value vs. SHAP value) = positive across all 5,000
+sampled tracts — the relationship is monotonically positive, not an artifact.
+
+Four reinforcing mechanisms (see Section 3.1 of the report):
+  a) Proxy for economic connectivity  — r = 0.469 with Internet Access Score
+  b) Healthcare system engagement    — requires transport, insurance, supply
+  c) Workforce productivity signal   — dental disease = absenteeism
+  d) Income/insurance proxy          — regular dental care needs both
+
+All 9 Delta counties are 100% Primary Care HPSA-designated. The healthcare
+infrastructure has essentially collapsed — dental access proxies for that.
+
+Implication: this is an economic infrastructure intervention, not just a
+"health" one. Expanding FQHCs, mobile dental units, and Medicaid navigator
+programs in the Delta would address the #1 turnaround predictor directly.
+
+
+MODEL METHODOLOGY (brief)
+──────────────────────────
+Study population : 25,142 tracts with IGS < 45 in 2017
+Outcome          : Turnaround = IGS ≥ 45 by 2025 (n = 8,547 yes, 16,595 no)
+Features         : 89 granular features across 10 public datasets
+                   (population-normalised rates, NOT opaque composites)
+
+Models trained with 5-fold stratified CV:
+  Logistic Regression   AUC 0.718 ± 0.006  (linear baseline)
+  Random Forest         AUC 0.763 ± 0.005  ← SHAP source
+  Gradient Boosting     AUC 0.771 ± 0.004
+
+TreeSHAP run on 5,000 randomly sampled tracts (random_state = 42).
+Direction labels corrected using Spearman corr(feature_value, SHAP_value)
+rather than sign of mean SHAP — avoids sign artifacts on near-zero means.
+
+
+PROJECT STRUCTURE (where to look)
+───────────────────────────────────
+project/
+├── config.py                          # All data paths and constants
+├── 01_ingest/                         # Raw → Parquet (one script per source)
+├── 02_build/                          # Join datasets, build feature matrix
+├── 03_analysis/
+│   └── expanded_priority_matrix.py    # ← CORE: FEATURE_REGISTRY, ML pipeline,
+│                                      #   compute_gaps(), train_and_shap()
+├── 04_app/
+│   ├── app.py                         # Home page
+│   ├── pages/
+│   │   ├── 1_IGS_Landscape.py         # National choropleth
+│   │   ├── 2_Delta_Deep_Dive.py       # County/tract drilldown + Folium map
+│   │   ├── 3_ML_Discovery.py          # SHAP importance + beeswarm
+│   │   └── 4_Priority_Matrix.py       # 2×2 investment matrix (per county)
+│   └── components/
+│       ├── maps.py                    # Folium map (no geopandas dependency)
+│       ├── charts.py                  # Plotly chart builders
+│       └── theme.py                   # CSS + sidebar nav
+├── data_processed/
+│   ├── expanded_model.parquet         # 25K tracts × 89 features + outcome
+│   ├── expanded_shap_summary.parquet  # Per-feature SHAP stats + direction
+│   ├── expanded_shap_values.parquet   # 5K × 89 SHAP values (beeswarm source)
+│   ├── expanded_shap_sample.parquet   # Feature values for those 5K tracts
+│   ├── igs_national.parquet           # County-level IGS for choropleth
+│   ├── delta_profile.parquet          # Delta tracts with all enrichment
+│   └── community_typology.parquet     # Turnaround/Stuck labels + typology
+└── report/
+    ├── report.pdf                     # ← READ THIS FIRST
+    ├── report.tex                     # LaTeX source
+    ├── generate_figures.py            # Reproduces all 6 figures
+    └── figures/                       # 6 publication-quality PDFs
+
+
+DATA SOURCES (10 public datasets)
+───────────────────────────────────
+  Mastercard IGS      2017–2025   tract-level IGS + 3 pillars + 9 sub-indicators
+  CDC PLACES          2022        27 chronic-disease prevalence rates (tract)
+  CDC SVI             2022        13 normalised sub-indicator rates (tract)
+  USDA Food Atlas     2019        food access flags, SNAP, school meals (tract)
+  FEMA NRI            2023        natural hazard risk score (tract)
+  CDC EJI             2022        environmental burden + health vulnerability
+  HRSA HPSA/MUA       2024        shortage-area designation + HPSA score (county)
+  AHRF                2024–25     physician counts, hospital beds (county)
+  Census CBP/ZBP      2023        establishments by NAICS sector (county + ZIP)
+  SBA Rankings        2025        small-business metrics by state
+
+
+QUESTIONS TO INVESTIGATE IN THE APP
+─────────────────────────────────────
+1. In Page 3, switch the beeswarm to "DENTAL_CrudePrev" — do the red/blue
+   clusters confirm the direction?  (They do: red right, blue left.)
+
+2. In Page 4, select "Quitman County" — check what lands in Act Now.
+   Then switch to "Washington County" — which features shift quadrant?
+
+3. In Page 2, select "Coahoma County", open the Health Outcomes tab.
+   Compare its diabetes and hypertension rates to the national averages.
+
+4. In Page 3, set the SHAP slider to show all 89 features. Notice how
+   RPL_THEME composites (SVI) rank low — replaced by 13 granular rates
+   that actually appear in the top 20.
+
+================================================================================
