@@ -42,9 +42,9 @@ We trained a 3-model machine-learning ensemble on **89 granular features** from 
 
 | Model | CV ROC-AUC | Role |
 |-------|-----------|------|
-| Logistic Regression | 0.718 ± 0.006 | Linear baseline |
-| Random Forest | 0.763 ± 0.005 | TreeSHAP source |
-| Gradient Boosting | 0.771 ± 0.004 | Sequential learning |
+| Logistic Regression | 0.854 ± 0.005 | Linear baseline |
+| Random Forest | 0.864 ± 0.007 | TreeSHAP source |
+| Gradient Boosting | 0.876 ± 0.006 | Sequential learning |
 
 5-fold stratified cross-validation · 25,142 at-risk tracts · TreeSHAP on 5,000-tract sample
 
